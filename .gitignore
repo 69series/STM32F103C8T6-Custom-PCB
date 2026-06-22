@@ -1,0 +1,4 @@
+.history/
+STM32F103C8T6-backups/
+*.lck
+*.bak
