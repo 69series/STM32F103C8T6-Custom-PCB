@@ -532,7 +532,7 @@
     "last_paths": {
       "idf": "",
       "netlist": "",
-      "plot": "manufaturing/",
+      "plot": "docs/",
       "specctra_dsn": "",
       "vrml": ""
     },
@@ -544,7 +544,7 @@
       "method": 0,
       "sort_order": 0
     },
-    "bom_export_filename": "STM32F103C8T6.csv",
+    "bom_export_filename": "manufacturing\\STM32F103C8T6.csv",
     "bom_fmt_presets": [],
     "bom_fmt_settings": {
       "field_delimiter": ",",

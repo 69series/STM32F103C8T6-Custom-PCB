@@ -45,7 +45,7 @@ This repository documents the complete design process of a custom STM32F103C8T6-
 
 The schematic is organized into four functional blocks: power supply, microcontroller core, USB circuitry, and external interface headers.
 
-![Schematic](docs/schematic.png)
+![Schematic](docs/schematic.svg)
 
 ### Power Supply
 
@@ -171,3 +171,91 @@ This is the only method that supports real-time debugging, not just flashing.
 
 > **Note:** Unlike boards with an onboard USB-to-serial bridge (e.g. ESP32 dev boards), this design requires manual BOOT0/reset toggling for every flash cycle, since there is no automatic reset circuitry. See [Future Improvements](#future-improvements) for a planned revision addressing this.
 
+
+## Bill of Materials
+
+| Ref | Qty | Value / Part | Footprint | Description |
+|---|---|---|---|---|
+| U1 | 1 | STM32F103C8T6 | LQFP-48, 7x7mm, 0.5mm pitch | Arm Cortex-M3 MCU, 64KB Flash, 20KB RAM, 72MHz |
+| U2 | 1 | AMS1117-3.3 | SOT-223-3 | 1A LDO regulator, 3.3V fixed output |
+| Y1 | 1 | 16MHz crystal | 3225 SMD (3.2x2.5mm) | 4-pin crystal, GND on pins 2 & 4 |
+| J1 | 1 | USB Micro-B | Würth 629105150521 | USB connector for power + data |
+| J2, J3, J4 | 3 | Conn_01x04_Pin | 2.54mm pin header, 1x04 | UART, SWD, and I2C breakout headers |
+| SW1 | 1 | SW_SPDT | SMD SPDT (PCM12) | BOOT0 mode selector switch |
+| D1 | 1 | LED (Red) | 0603 | Power/status indicator |
+| FB1 | 1 | 120Ω ferrite bead | 0603 | VDDA noise isolation |
+| C1, C2, C3, C4, C9 | 5 | 100nF | 0402 | Decoupling capacitors |
+| C5 | 1 | 10µF | 0603 | Bulk decoupling capacitor |
+| C6 | 1 | 10nF | 0402 | Decoupling capacitor |
+| C7, C8 | 2 | 1µF | 0402 | VDDA decoupling capacitors |
+| C10, C11 | 2 | 10pF | 0402 | Crystal load capacitors |
+| C12, C13 | 2 | 22µF | 0805 | USB/regulator bulk capacitors |
+| R1 | 1 | 10kΩ | 0402 | BOOT0 pulldown resistor |
+| R2 | 1 | 1.5kΩ | 0402 | USB D+ pull-up resistor |
+| R3, R4, R5 | 3 | 1.5kΩ | 0402 (hand-solder pad) | I2C2 SCL/SDA pull-ups |
+
+**Total component count:** 17 unique references, 30 individual parts
+
+Full machine-readable BOM available at [`manufacturing/STM32F103C8T6.csv`](manufacturing/STM32F103C8T6.csv).
+
+## Manufacturing Files
+
+All files required to fabricate and assemble this board are available in the [`manufacturing/`](manufacturing/) folder.
+
+| File | Purpose |
+|---|---|
+| `STM32F103C8T6-F_Cu.gbr` | Top copper layer |
+| `STM32F103C8T6-B_Cu.gbr` | Bottom copper layer (ground plane) |
+| `STM32F103C8T6-F_Mask.gbr` | Top soldermask |
+| `STM32F103C8T6-B_Mask.gbr` | Bottom soldermask |
+| `STM32F103C8T6-F_Paste.gbr` | Top solder paste (for SMT assembly) |
+| `STM32F103C8T6-B_Paste.gbr` | Bottom solder paste |
+| `STM32F103C8T6-F_Silkscreen.gbr` | Top silkscreen |
+| `STM32F103C8T6-B_Silkscreen.gbr` | Bottom silkscreen |
+| `STM32F103C8T6-Edge_Cuts.gbr` | Board outline |
+| `STM32F103C8T6.drl` | Drill file (holes and vias) |
+| `STM32F103C8T6.csv` | Component placement / position file |
+| `STM32F103C8T6-all-pos.csv` | Full pick-and-place file |
+
+### Ordering this board
+
+1. Compress the entire `manufacturing/` folder into a `.zip`
+2. Upload to any PCB fabrication service (e.g. JLCPCB, PCBWay, OSH Park)
+3. Standard 2-layer specifications apply (1.6mm board thickness, 1oz copper — adjust if your fab defaults differ)
+4. For SMT assembly service, the position files (`.csv`) and BOM can be supplied alongside the Gerbers
+
+## Design Decisions
+
+This section documents the reasoning behind key design choices, beyond just "what" was implemented.
+
+### Power Integrity
+
+- **Per-pin decoupling over shared capacitors:** Each VDD pin has its own dedicated 100nF capacitor placed as close as possible, rather than sharing fewer capacitors across multiple pins. Trace length between a capacitor and a pin adds inductance, which degrades high-frequency decoupling effectiveness — shorter paths mean cleaner suppression of switching noise.
+- **Bulk + decoupling capacitor pairing:** The 10µF bulk capacitor and 100nF decoupling capacitors serve different roles — the bulk capacitor handles slower, larger transient current demands, while the smaller capacitors filter high-frequency noise. Neither alone is sufficient.
+- **Analog supply isolation:** VDDA is separated from the digital 3.3V rail using a ferrite bead rather than a simple trace connection. Digital switching noise on VDD would otherwise couple directly into the ADC's reference supply, degrading analog measurement accuracy.
+
+### Signal Routing
+
+- **UART relocated away from USB:** USART1 was moved from its default pins (PA9/PA10) to PB6/PB7 specifically because the default pins sit immediately adjacent to the USB differential pair (PA11/PA12) on the physical package. This reduces the risk of crosstalk between UART signaling and the sensitive USB data lines.
+- **USB differential pair routing:** D+/D- are routed as a closely-coupled pair to maintain consistent characteristic impedance, with the pull-up resistor placed close to the connector before the signals reach the MCU.
+
+### Manufacturing and Assembly Tradeoffs
+
+- **Thermal relief over solid ground connection:** The bottom-layer ground plane connects to pads via thermal relief (spoked) rather than a direct solid fill. A pad fused directly into a large copper pour sinks heat extremely fast, making hand-soldering difficult or impossible. Thermal relief trades a small amount of electrical/thermal performance for practical assembly feasibility.
+- **Conservative via sizing:** 0.7mm/0.75mm vias were chosen deliberately larger than the minimum size most fabs support. This prioritizes manufacturing yield and tolerance margin over board density — an appropriate tradeoff for a first PCB design where reliability of the physical board mattered more than compactness.
+
+### Programming and Debug Strategy
+
+- **Three independent flashing paths:** Rather than relying on a single programming method, the board supports SWD, UART bootloader, and USB DFU. SWD is the only method offering live debugging; the other two provide flashing-only fallback paths requiring no specialized programmer hardware. This redundancy was a deliberate choice to maximize flexibility, since SWD requires an external ST-Link, which may not always be on hand.
+
+## Future Improvements
+
+- **Manual reset button:** Add a pushbutton across NRST and GND (alongside the existing decoupling capacitor) to allow manual reset without power-cycling the board.
+- **Automatic flashing via USB-UART bridge:** Add a CP2102/CH340-style USB-to-UART bridge chip wired to UART1, combined with a DTR/RTS-driven transistor circuit controlling NRST and BOOT0. This would replicate the auto-reset behavior seen on boards like ESP32 dev kits, removing the need to manually toggle BOOT0 and power-cycle the board for every UART flash.
+- **Status LEDs:** Add dedicated LEDs for power and a user-controllable GPIO indicator, beyond the current single power/status LED.
+- **Reverse polarity / ESD protection:** Add protection diodes on the USB VBUS line and ESD suppression on the D+/D- lines for improved robustness in real-world use.
+- **Castellated edge or header-based expansion:** Consider exposing additional unused GPIOs (currently marked as no-connect in the schematic) via a header for future peripheral expansion.
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
